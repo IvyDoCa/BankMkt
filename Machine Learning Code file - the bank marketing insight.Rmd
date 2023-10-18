@@ -1,0 +1,611 @@
+---
+title: "MAchine Learning Project Write-up - The bank marketing insight"
+author: "Ivy Do"
+date: "25/12/2022"
+output: word_document
+---
+## Introduction  
+File's name: Project Code file  
+The following chunk codes are utilized for exploring insights in the dataset Bank_Full.csv.  
+```{r Import the dataset}
+#Import the dataset
+df <- read.csv("Bank_Full.csv", header = TRUE, stringsAsFactors = TRUE)
+#See the dataset
+head(df)
+```
+```{r 4.1.	Data preprocessing}
+#Check the number of complete cases
+length(which(complete.cases(df)))
+#Return the number of rows
+nrow(df)
+
+#Using package mice to visualize the patterns of missingness 
+install.packages("mice")
+library("mice")
+md.pattern(df, rotate.names = T)
+remove.packages("mice")
+
+#Reducing noise
+
+#Noise reduction for the variable Balance
+hist(df$balance, main = "Histogram of Balance variable before reducing noise")
+# Load the necessary library
+library(dplyr)
+# Define the Z-score threshold
+threshold <- 3
+# Calculate the mean and standard deviation of the data
+mean_value <- mean(df$balance)
+sd_value <- sd(df$balance)
+# Calculate the Z-score for each data point
+df$z_score <- (df$balance - mean_value) / sd_value
+# Remove data points that fall outside of the specified range
+df <- df %>% filter(abs(z_score) <= threshold)
+#count the observation
+counts <- table(df$balance)
+total_observations <- sum(counts)
+total_observations
+#Then after reducing noise in the variable Balance, the observations are 43,524.
+hist(df$balance, main = "Histogram of Balance variable after reducing noise")
+
+#Noise reduction for the variable Duration
+hist(df$duration, main = "Histogram of Duration variable before reducing noise")
+# Calculate the mean and standard deviation of the data
+mean_valueD <- mean(df$duration)
+sd_valueD <- sd(df$duration)
+# Calculate the Z-score for each data point
+df$z_scoreD <- (df$duration - mean_valueD) / sd_valueD
+# Remove data points that fall outside of the specified range
+df <- df %>% filter(abs(z_scoreD) <= threshold)
+#count the observation
+counts <- table(df$duration)
+total_observationsD <- sum(counts)
+total_observationsD
+#Then after reducing noise in the variable Balance, the observations are 44,248.
+hist(df$duration, main = "Histogram of Duration variable after reducing noise")
+
+# Convert the "duration" column to minutes
+df$duration <- df$duration/60
+```
+```{r 4.2. Descriptive & Frequencies}
+
+#For numerical vars
+
+#Variable age
+mean(df$age)
+sd(df$age)
+sd(df$age)/mean(df$age)*100 
+
+#Variable balance
+mean(df$balance)
+sd(df$balance)
+sd(df$balance)/mean(df$balance)*100 
+median(df$balance)
+
+#Variable duration
+mean(df$duration)
+sd(df$duration)
+sd(df$duration)/mean(df$duration)*100 
+
+#Detect outliers
+#Divide the screen in 2 columns and 2 lines
+par(mfrow=c(1,3))
+boxplot(df$age, main = "Boxplot of Age", horizontal = FALSE, col= "lightpink")
+hist(df$balance, main = "Histogram of Balance", col= "lightblue", border = FALSE)
+qqnorm(df$duration, main = "Normal Q-Q plot of Duration", col= "lightgreen")
+
+#For categorical vars
+library(ggplot2)
+
+#For marital variable
+# Create a data frame with the marital variable
+df <- data.frame(marital = c("divorced", "married", "single", "unknown"),
+                 count = c(12, 60, 28, 0))
+
+# Create a pie chart of the marital variable with pastel colors and percentages
+ggplot(df, aes(x="", y=count, fill=marital)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0) +
+  scale_fill_brewer(palette="Pastel1") +
+  geom_text(aes(label=paste0(count, "%")), position=position_stack(vjust=0.5)) +
+  labs(title = "Pie chart of the marital variable")
+
+#For job variable
+ggplot(df, aes(x=job, fill=job)) + 
+  geom_bar() +
+  theme(axis.text.x = element_text(angle=90, vjust=0.5, hjust=1)) +
+  labs(title="Bar chart of job types", x="Job Type", y="Count") +
+  scale_fill_manual(values = rep("#ADD8E6", 12))
+
+#For the education variable
+ggplot(df, aes(x=education)) + 
+  geom_bar(fill="#ADD8E6") +
+  labs(title="Bar chart of Education Levels", x="Education Level", y="Count")
+
+#Check the distribution of observations in the variable Y
+df$y <- factor(df$y,levels = c("no", "yes"),
+                     labels = c(0,1))
+prop <- table(df$y)/length(df$y)
+perc <- prop*100
+perc
+#3D exploded Pie chart for variable Y
+install.packages("plotrix")
+library("plotrix")
+dy <- c("Who says no","Who says yes")
+pie3D(perc, labels=dy, explode = 0.1,  main= "Pie Chart of dependent Y variable")
+```
+```{r 4.3.	Exploring Differences in Two Variables using T-Test Analysis}
+
+#T-test between the dependent y variable and Default variable
+# Convert y variable to numeric
+df$y <- as.numeric(df$y)
+
+# Calculate the mean of y by job category
+tapply(df$y, list(df$default), mean)
+
+#Check the difference
+t.test(df$y~df$default)
+
+#Pearson Correlation testing between the dependent y variable and Default variable
+# Convert y variable to numeric
+df$default <- as.numeric(df$default)
+
+#Coefficient of correlation
+cor(df$default,df$y)
+cor.test(df$default,df$y)
+```
+
+```{r 4.4. Logistics regresison}
+#Finding the optimal model
+m1<- glm(df$y~ df$job + df$marital + df$education + df$default + df$housing
+         + df$loan + df$contact + df$poutcome, 
+         data=df, family = "binomial")
+summary(m1)
+m2<- glm(df$y~ df$marital + df$education + df$default + df$housing
+         + df$loan + df$contact + df$poutcome, 
+         data=df, family = "binomial")
+summary(m2)
+m3<- glm(df$y~ df$education + df$default + df$housing
+         + df$loan + df$contact + df$poutcome, 
+         data=df, family = "binomial")
+summary(m3)
+m4<- glm(df$y~ df$default + df$housing + df$loan + df$contact + df$poutcome, 
+         data=df, family = "binomial")
+summary(m4)
+m5<- glm(df$y~ df$housing + df$loan + df$contact + df$poutcome, 
+         data=df, family = "binomial")
+summary(m5)
+m6<- glm(df$y~ df$loan + df$contact + df$poutcome, 
+         data=df, family = "binomial")
+summary(m6)
+m7<- glm(df$y~ df$loan + df$contact + df$poutcome, 
+         data=df, family = "binomial")
+summary(m7)
+m8<- glm(df$y~ df$loan + df$contact + df$poutcome, 
+         data=df, family = "binomial")
+summary(m8)
+m9<- glm(df$y~ df$loan + df$contact + df$poutcome, data=df, family = "binomial")
+summary(m9)
+m10<- glm(df$y~ df$contact + df$poutcome, data=df, family = "binomial")
+summary(m10)
+m11<- glm(df$y~ df$poutcome, data=df, family = "binomial")
+summary(m11)
+
+#P-value calculating
+# Chi-squared distribution: Degrees of freedom = 11
+chi_sq <- 195
+df <- 11
+p_val <- pchisq(chi_sq, df, lower.tail = FALSE)
+print(p_val) # 2.220446e-16
+
+# Chi-squared distribution: Degrees of freedom = 2
+chi_sq <- 105.56
+df <- 2
+p_val <- pchisq(chi_sq, df, lower.tail = FALSE)
+print(p_val) # 3.576279e-23
+
+# Chi-squared distribution: Degrees of freedom = 3
+chi_sq <- 49.99
+df <- 3
+p_val <- pchisq(chi_sq, df, lower.tail = FALSE)
+print(p_val) # 1.124824e-10
+
+# Chi-squared distribution: Degrees of freedom = 1
+chi_sq <- 5.57
+df <- 1
+p_val <- pchisq(chi_sq, df, lower.tail = FALSE)
+print(p_val) # 0.01836115
+
+# Chi-squared distribution: Degrees of freedom = 1
+chi_sq <- 427.08
+df <- 1
+p_val <- pchisq(chi_sq, df, lower.tail = FALSE)
+print(p_val) # 5.836787e-95
+
+# Chi-squared distribution: Degrees of freedom = 0
+chi_sq <- 0
+df <- 0
+p_val <- pchisq(chi_sq, df, lower.tail = FALSE)
+print(p_val) # NaN
+
+# Chi-squared distribution: Degrees of freedom = 0
+chi_sq <- 0
+df <- 0
+p_val <- pchisq(chi_sq, df, lower.tail = FALSE)
+print(p_val) # NaN
+
+# Chi-squared distribution: Degrees of freedom = 1
+chi_sq <- 161.78
+df <- 1
+p_val <- pchisq(chi_sq, df, lower.tail = FALSE)
+print(p_val) # 8.327295e-37
+
+# Chi-squared distribution: Degrees of freedom = 2
+chi_sq <- 722.56
+df <- 2
+p_val <- pchisq(chi_sq, df, lower.tail = FALSE)
+print(p_val) # 1.331298e-157
+
+#Visualization of model
+# load the coefplot package
+install.packages("coefplot")
+library("coefplot")
+
+# create the coefficient plot
+coefplot(m4, intercept = TRUE)
+remove.packages("coefplot")
+```
+
+```{r 4.5.	Ensemble Methods - 1}
+#loading packages
+install.packages("psych")
+library("psych")            #for general functions
+install.packages("ggplot2")
+library("ggplot2")          #for data visualization
+install.packages("caret")
+library("caret")            #for training and cross validation
+install.packages("rpart")
+library("rpart")            #for trees
+install.packages("rattle")
+library("rattle")           # Fancy tree plot
+install.packages("rpart.plot")
+library("rpart.plot")       # Enhanced tree plots
+install.packages("RColorBrewer")
+library("RColorBrewer")     # Color selection for fancy tree plot
+install.packages("party")
+library("party")            # Alternative decision tree algorithm
+install.packages("partykit")
+library("partykit")         # Convert rpart object to BinaryTree
+install.packages("pROC")
+library("pROC")             #for ROC curves
+```
+
+```{r 4.5.	Ensemble Methods - 2}
+#Splitting the data into training and test sets
+#random sample half the rows 
+halfsample = sample(dim(df)[1], dim(df)[1]/2) # half of sample
+
+#create training and test data sets
+df.train = df[halfsample, ]
+df.test = df[-halfsample, ]
+
+#Setting up the k-fold cross validation k = 10 cross-validation folds.}
+#Setting the random seed for replication
+set.seed(1234)
+
+#setting up cross-validation
+cvcontrol <- trainControl(method="repeatedcv", number = 10,
+                          allowParallel=TRUE)
+```
+
+```{r 4.5.	Ensemble Methods - Model 0: A Single Classification Tree}
+#train the model
+train.tree <- train(as.factor(y) ~ ., 
+                   data=df.train,
+                   method="ctree",
+                   trControl=cvcontrol,
+                   tuneLength = 10)
+train.tree
+
+# plot tree
+plot(train.tree)
+plot(train.tree$finalModel,
+    main="Regression Tree for Previous Outcome")
+
+#Computing for train data
+#obtaining class predictions
+tree.classTrain <-  predict(train.tree, 
+                          type="raw")
+head(tree.classTrain)
+
+# convert factor variable to character
+df.train$y <- as.character(df.train$y)
+tree.classTrain <- as.character(tree.classTrain)
+
+# set levels of factor variable to be the same
+levels(tree.classTrain) <- levels(df.train$y)
+
+# convert factor variable back to factor
+df.train$y <- as.factor(df.train$y)
+tree.classTrain <- as.factor(tree.classTrain)
+
+# compute confusion matrix
+confusionMatrix(df.train$y, tree.classTrain)
+
+#Computing for test data
+#obtaining class predictions
+tree.classTest <-  predict(train.tree, 
+                         newdata = df.test,
+                          type="raw")
+head(tree.classTest)
+
+# convert factor variables to character
+df.test$y <- as.character(df.test$y)
+tree.classTest <- as.character(tree.classTest)
+
+# set levels of factor variable to be the same
+levels(tree.classTest) <- levels(df.test$y)
+
+# convert factor variables back to factor
+df.test$y <- as.factor(df.test$y)
+tree.classTest <- as.factor(tree.classTest)
+
+# compute confusion matrix
+confusionMatrix(df.test$y, tree.classTest)
+
+#Obtaining predicted probabilites for Test data
+tree.probs=predict(train.tree,
+                 newdata=df.test,
+                 type="prob")
+head(tree.probs)
+
+#Calculate ROC curve
+rocCurve.tree <- roc(df.test$y,tree.probs[,"yes"])
+#plot the ROC curve
+plot(rocCurve.tree,col=c(4), main = "ROC curve by extracting probabilites of “Yes” - Model 0")
+
+#calculate the area under curve (bigger is better)
+auc(rocCurve.tree)
+```
+
+```{r 4.5.	Ensemble Methods - Model 1: Bagging of Classification Tree}
+#Fix data file for use in bag() function
+df2 <- df.train
+df2$loan <- as.factor(df2$loan)
+df2$housing <- as.factor(df2$housing)
+
+#Using bag()
+train.bagg <- bag(df2[,-17], df2[,17], B = 10,
+                  bagControl = bagControl(fit = ctreeBag$fit,
+                                          predict = ctreeBag$pred,
+                                          aggregate = ctreeBag$aggregate))
+
+#Using treebag 
+train.bagg <- train(as.factor(y) ~ ., 
+                   data = df2,
+                   method = "treebag",
+                   trControl = cvcontrol,
+                   importance = TRUE)
+
+train.bagg
+
+plot(varImp(train.bagg), main="Variable importance plot for bagged CART model 1")
+
+#obtaining class predictions
+bagg.classTrain <-  predict(train.bagg, 
+                          type="raw")
+head(bagg.classTrain)
+
+#computing confusion matrix
+confusionMatrix(df.train$y,bagg.classTrain)
+
+#For test dataset
+#obtaining class predictions
+bagg.classTest <-  predict(train.bagg, 
+                         newdata = df.test,
+                          type="raw")
+head(bagg.classTest)
+
+# check the length of two vectors
+length(df.train$y) #22605
+length(bagg.classTest) #22606
+
+#computing confusion matrix
+confusionMatrix(df.train$y, head(bagg.classTest, -1)) #remove the extra element from bagg.classTest
+
+#Obtaining predicted probabilites for Test data
+bagg.probs=predict(train.bagg,
+                 newdata=df.test,
+                 type="prob")
+head(bagg.probs)
+
+#Calculate ROC curve
+rocCurve.bagg <- roc(df.test$y,bagg.probs[,"yes"])
+#plot the ROC curve
+plot(rocCurve.bagg,col=c(6), main = "ROC curve by extracting probabilites of “Yes” - Model 1")
+
+#calculate the area under curve (bigger is better)
+auc(rocCurve.bagg)
+```
+
+```{r 4.5.	Ensemble Methods - Model 2: Random Forest for classification trees}
+#Training the model using random forest
+install.packages("randomForest")
+library("randomForest")
+train.rf <- train(as.factor(y) ~ ., 
+                  data=df.train,
+                  method="rf",
+                  trControl=cvcontrol,
+                  tuneLength = 3,
+                  importance=TRUE)
+train.rf
+
+#obtaining class predictions
+rf.classTrain <-  predict(train.rf, 
+                          type="raw")
+head(rf.classTrain)
+
+#computing confusion matrix
+confusionMatrix(df.train$y,rf.classTrain)
+
+#obtaining class predictions
+rf.classTest <-  predict(train.rf, 
+                         newdata = df.test,
+                          type="raw")
+head(rf.classTest)
+
+#computing confusion matrix
+confusionMatrix(df.test$y,rf.classTest)
+
+#ROC curve by extracting probabilites of “Yes”.
+
+#Obtaining predicted probabilites for Test data
+rf.probs=predict(train.rf,
+                 newdata=df.test,
+                 type="prob")
+
+head(rf.probs)
+
+#Calculate ROC curve
+rocCurve.rf <- roc(df.test$y,rf.probs[,"yes"])
+
+#plot the ROC curve
+plot(rocCurve.rf,col=c(3), main = "ROC curve by extracting probabilites of “Yes” - Model 2")
+
+#calculate the area under curve (bigger is better)
+auc(rocCurve.rf)
+```
+
+```{r 4.5.	Ensemble Methods - Model 3: Random Forest with Boosting}
+install.packages("gbm")
+library("gbm")
+
+#Training the model
+train.gbm <- train(as.factor(y) ~ ., 
+                   data=df.train,
+                   method="gbm",
+                   verbose=F,
+                   trControl=cvcontrol)
+train.gbm
+
+#confusion matrix for the Training data.
+
+#obtaining class predictions
+gbm.classTrain <-  predict(train.gbm, 
+                          type="raw")
+head(gbm.classTrain)
+
+#computing confusion matrix
+confusionMatrix(df.train$y,gbm.classTrain)
+
+#the confusion matrix when applied to the Test data.
+
+#obtaining class predictions
+gbm.classTest <-  predict(train.gbm, 
+                         newdata = df.test,
+                          type="raw")
+head(gbm.classTest)
+
+#computing confusion matrix
+confusionMatrix(df.test$y,gbm.classTest)
+
+#the ROC curve by extracting probabilites of “Yes”.
+
+#Obtaining predicted probabilites for Test data
+gbm.probs=predict(train.gbm,
+                 newdata=df.test,
+                 type="prob")
+head(gbm.probs)
+
+#Calculate ROC curve
+rocCurve.gbm <- roc(df.test$y,gbm.probs[,"yes"])
+#plot the ROC curve
+plot(rocCurve.gbm, col=c(3), main = "ROC curve by extracting probabilites of “Yes” in Model 3")
+
+#calculate the area under curve
+auc(rocCurve.gbm)
+```
+
+```{r 4.5.	Ensemble Methods - model comparisons}
+#ROC curves.
+
+plot(rocCurve.tree, col = "blue", main = "ROC Curves for Different Models")
+plot(rocCurve.bagg, add = TRUE, col = "magenta")
+plot(rocCurve.rf, add = TRUE, col = "black")
+plot(rocCurve.gbm, add = TRUE, col = "green")
+legend("bottomright", legend = c("Classification Tree - AUC=0.8918", 
+                                 "Bagged Trees - AUC=0.9058", 
+                                 "Random Forest -  AUC=0.9271", 
+                                 "Gradient Boosting Machine - AUC=0.9207"),
+       col = c("blue", "magenta", "black", "green"), lty = 1)
+
+
+#calculate f-beta score
+# Define the F-beta function
+fbeta <- function(y_true, y_pred) {
+  fbeta_score <- function(y_true, y_pred, beta = sqrt(5)) {
+    precision <- precision(y_pred, y_true)
+    recall <- recall(y_pred, y_true)
+    numerator <- (1 + beta^2) * precision * recall
+    denominator <- beta^2 * precision + recall
+    fbeta <- numerator / denominator
+    return(fbeta)
+  }
+  return(fbeta_score(y_true, y_pred))
+}
+
+# Generate predictions on the training data
+#Model 0
+train.tree.pred <- predict(train.tree, newdata = df.train)
+
+# Calculate the F-beta score
+fbeta_score0 <- fbeta(df.train$y, train.tree.pred)
+fbeta_score0
+
+#Model 1
+train.bag.pred <- predict(train.bagg, newdata = df.train)
+
+# Calculate the F-beta score
+fbeta_score1 <- fbeta(df.train$y, train.bag.pred)
+fbeta_score1
+
+#Model 2
+train.rf.pred <- predict(train.rf, newdata = df.train)
+
+# Calculate the F-beta score
+fbeta_score2 <- fbeta(df.train$y, train.rf.pred)
+fbeta_score2
+
+#Model 3
+train.gbm.pred <- predict(train.gbm, newdata = df.train)
+
+# Calculate the F-beta score
+fbeta_score3 <- fbeta(df.train$y, train.gbm.pred)
+fbeta_score3
+```
+
+```{r 4.6.	 Model evaluation and deployment}
+#save the data
+save(train.rf, file = "train.rf.Rdata")
+
+# Load the trained Random Forest model
+load("train.rf.Rdata")
+
+# Make predictions on new data using the predict() function
+predictions <- predict(train.rf, newdata=df)
+
+# View the predicted classes for the new data
+table(predictions)
+
+# Load the actual values of the target variable for the new data
+y.actual <- df$y
+
+# Compute the accuracy of the Random Forest model
+accuracy <- sum(predictions == y.actual) / length(y.actual)
+accuracy
+
+# View the variable importance measures for the Random Forest model
+importance <- importance(train.rf$finalModel)
+importance
+```
+
+
